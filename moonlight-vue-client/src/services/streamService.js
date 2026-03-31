@@ -13,6 +13,7 @@ export class StreamService {
     this.api = null
     this.eventTarget = new EventTarget()
     this.isInitialized = false
+    this.isConnected = false  // connectionComplete 后置为 true
   }
 
   // 初始化事件监听
@@ -76,11 +77,15 @@ export class StreamService {
   setupStreamListeners() {
     if (!this.stream) return
 
+    let connectionEstablished = false
+
     this.stream.addInfoListener((event) => {
       const data = event.detail
       
       switch (data.type) {
         case 'connectionComplete':
+          connectionEstablished = true
+          this.isConnected = true
           this.emit('ready', { capabilities: data.capabilities })
           break
         case 'app':
@@ -88,8 +93,15 @@ export class StreamService {
           break
         case 'addDebugLine':
           this.emit('debug', { message: data.line, type: data.additional?.type })
-          if (data.additional?.type === 'fatal') {
-            this.emit('error', { message: data.line })
+          // 只有连接建立后出现的真正致命错误才上报
+          // disconnected 是暂时断开，WebRTC 会自动尝试重连，不视为错误
+          // failed/closed 才是真正的连接终止
+          if (connectionEstablished && data.additional?.type === 'fatal') {
+            const line = data.line || ''
+            const isTransient = /disconnected/i.test(line)
+            if (!isTransient) {
+              this.emit('error', { message: line })
+            }
           }
           break
         case 'serverMessage':

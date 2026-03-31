@@ -129,7 +129,8 @@ const startStream = async () => {
     
     streamService.on('debug', (e) => {
       const { message, type } = e.detail
-      if (type === 'fatalDescription') {
+      // fatalDescription 只在连接已建立后才显示为错误，且排除 disconnected（暂时断开，会自动重连）
+      if (type === 'fatalDescription' && streamService.isConnected && !/disconnected/i.test(message)) {
         showStatus('连接失败', message, 'error')
       }
       console.log(`[Moonlight] ${message}`)

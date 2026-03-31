@@ -24,7 +24,11 @@ export default defineConfig({
       },
       '/api': {
         target: 'http://localhost:8080',
-        changeOrigin: true
+        changeOrigin: true,
+        // 排除 WebSocket 升级请求，避免与上面的 ws 规则冲突
+        bypass(req) {
+          if (req.headers.upgrade === 'websocket') return false
+        }
       },
       '/host/stream': {
         target: 'ws://localhost:8080',
