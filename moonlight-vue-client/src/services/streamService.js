@@ -1,9 +1,11 @@
 // 云游戏流服务 - 封装 Moonlight Web 核心功能
 import { MOONLIGHT_CONFIG } from '@/config/moonlight.js'
+import '@moonlight/polyfill/index.js'
+import { Stream } from '@moonlight/stream/index.js'
+import { defaultStreamInputConfig, StreamInput } from '@moonlight/stream/input.js'
+import { Logger } from '@moonlight/stream/log.js'
 
-// 加载 Moonlight Web 模块（从原始项目中引用）
-// 注意：这些路径需要根据实际项目结构调整
-const moonlightBasePath = '/../moonlight-web-stream-file'
+const moonlightModules = { Stream, defaultStreamInputConfig, StreamInput, Logger }
 
 export class StreamService {
   constructor() {
@@ -33,22 +35,9 @@ export class StreamService {
     return this.api
   }
 
-  // 动态导入 Moonlight 模块
+  // 加载 Moonlight 模块（已在顶部静态导入）
   async loadMoonlightModules() {
-    try {
-      // 导入 polyfill
-      await import(/* @vite-ignore */ `${moonlightBasePath}/polyfill/index.js`)
-      
-      // 导入核心 Stream 类
-      const { Stream } = await import(/* @vite-ignore */ `${moonlightBasePath}/stream/index.js`)
-      const { defaultStreamInputConfig, StreamInput } = await import(/* @vite-ignore */ `${moonlightBasePath}/stream/input.js`)
-      const { Logger } = await import(/* @vite-ignore */ `${moonlightBasePath}/stream/log.js`)
-      
-      return { Stream, defaultStreamInputConfig, StreamInput, Logger }
-    } catch (error) {
-      console.error('加载 Moonlight 模块失败:', error)
-      throw new Error('无法加载云游戏核心模块，请检查 moonlight-web-stream-file 路径')
-    }
+    return moonlightModules
   }
 
   // 启动游戏流
