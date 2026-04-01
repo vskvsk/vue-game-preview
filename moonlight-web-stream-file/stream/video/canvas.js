@@ -126,8 +126,18 @@ export class CanvasVideoRenderer extends BaseCanvasVideoRenderer {
     onAnimationFrame() {
         const frame = this.currentFrame;
         if (frame && this.context) {
-            this.canvas.width = frame.displayWidth;
-            this.canvas.height = frame.displayHeight;
+            const newW = frame.displayWidth;
+            const newH = frame.displayHeight;
+            // 只在分辨率真正变化时更新 canvas 内部尺寸，并通知外部
+            if (this.canvas.width !== newW || this.canvas.height !== newH) {
+                this.canvas.width = newW;
+                this.canvas.height = newH;
+                // 派发自定义事件，携带最新分辨率
+                this.canvas.dispatchEvent(new CustomEvent('video-resize', {
+                    bubbles: true,
+                    detail: { width: newW, height: newH }
+                }));
+            }
             // Clear the canvas before drawing the new frame to prevent artifacts
             this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.context.drawImage(frame, 0, 0, this.canvas.width, this.canvas.height);

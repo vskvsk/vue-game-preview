@@ -95,6 +95,47 @@ const connectionStatus = ref({ show: false, message: '', detail: '', type: 'info
 let inputHandlers = null
 let statsInterval = null
 let controlsHideTimer = null
+let viewportObserver = null
+
+// ── Canvas 自适应布局 ──────────────────────────────────────────────
+// 记录当前视频流内部分辨率
+const videoResolution = { width: 0, height: 0 }
+
+/**
+ * 根据视频流分辨率和 viewport 容器尺寸，计算并应用
+ * "contain" 样式（保持宽高比居中，不超出容器）
+ */
+const fitCanvas = () => {
+  const vp = viewport.value
+  if (!vp) return
+  const canvas = vp.querySelector('canvas.video-stream')
+  if (!canvas) return
+
+  const { width: vw, height: vh } = vp.getBoundingClientRect()
+  const { width: cw, height: ch } = videoResolution
+
+  if (!cw || !ch || !vw || !vh) return
+
+  const scaleW = vw / cw
+  const scaleH = vh / ch
+  const scale = Math.min(scaleW, scaleH)
+
+  const displayW = Math.round(cw * scale)
+  const displayH = Math.round(ch * scale)
+
+  canvas.style.width  = `${displayW}px`
+  canvas.style.height = `${displayH}px`
+  // 移除 max-width/max-height 限制，改由 JS 精确控制尺寸
+  canvas.style.maxWidth  = 'none'
+  canvas.style.maxHeight = 'none'
+}
+
+/** 处理 canvas 上的 video-resize 自定义事件（视频流分辨率变化） */
+const onVideoResize = (e) => {
+  videoResolution.width  = e.detail.width
+  videoResolution.height = e.detail.height
+  fitCanvas()
+}
 
 // 显示连接状态
 const showStatus = (message, detail = '', type = 'info') => {
@@ -352,6 +393,13 @@ onMounted(() => {
   window.addEventListener('blur', onWindowBlur)
   document.addEventListener('visibilitychange', onVisibilityChange)
   
+  // 监听视频流分辨率变化（canvas 内部尺寸改变时派发 video-resize）
+  viewport.value?.addEventListener('video-resize', onVideoResize)
+
+  // 用 ResizeObserver 监听 viewport 容器尺寸变化，同步重新 fit
+  viewportObserver = new ResizeObserver(() => fitCanvas())
+  viewportObserver.observe(viewport.value)
+
   // 初始化已连接的游戏手柄
   for (const gamepad of navigator.getGamepads()) {
     if (gamepad) {
@@ -369,6 +417,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('gamepaddisconnected', onGamepadDisconnected)
   window.removeEventListener('blur', onWindowBlur)
   document.removeEventListener('visibilitychange', onVisibilityChange)
+
+  viewport.value?.removeEventListener('video-resize', onVideoResize)
+  viewportObserver?.disconnect()
+  viewportObserver = null
   
   if (controlsHideTimer) {
     clearTimeout(controlsHideTimer)
@@ -395,6 +447,8 @@ onBeforeUnmount(() => {
 
 .stream-viewport :deep(video),
 .stream-viewport :deep(canvas) {
+  display: block;
+  /* 初始尺寸由 CSS contain 兜底，JS fitCanvas() 会精确覆盖 */
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
