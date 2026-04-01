@@ -81,75 +81,67 @@
 
         <!-- 游戏列表 -->
         <section class="games-section" v-else>
-          <div class="section-header">
-            <button class="btn-back" @click="selectedHost = null">
-              ← 返回主机列表
-            </button>
-            <h2>{{ selectedHost.name }} - 游戏库</h2>
+          <!-- 顶部操作栏 -->
+          <div class="games-topbar">
+            <button class="btn-back" @click="selectedHost = null">← 返回主机列表</button>
+            <h2>{{ selectedHost.name }}</h2>
           </div>
 
-          <div class="settings-bar">
-            <div class="setting-item">
-              <label>分辨率:</label>
-              <select v-model="streamSettings.videoSize">
-                <option value="720p">720p</option>
-                <option value="1080p">1080p</option>
-                <option value="1440p">1440p</option>
-                <option value="4k">4K</option>
-              </select>
-            </div>
-            <div class="setting-item">
-              <label>帧率:</label>
-              <select v-model="streamSettings.fps">
-                <option :value="30">30 FPS</option>
-                <option :value="60">60 FPS</option>
-                <option :value="120">120 FPS</option>
-              </select>
-            </div>
-            <div class="setting-item">
-              <label>码率:</label>
-              <select v-model="streamSettings.bitrate">
-                <option :value="10000">10 Mbps</option>
-                <option :value="20000">20 Mbps</option>
-                <option :value="40000">40 Mbps</option>
-                <option :value="80000">80 Mbps</option>
-              </select>
-            </div>
-            <div class="setting-item">
-              <label>编码:</label>
-              <select v-model="streamSettings.videoCodec">
-                <option value="h264">H.264</option>
-                <option value="h265">H.265 (HEVC)</option>
-                <option value="av1">AV1</option>
-              </select>
-            </div>
-          </div>
-          
-          <div class="games-grid">
-            <div 
-              v-for="app in apps" 
-              :key="app.app_id"
-              class="game-card"
-              @click="startGame(app)"
-            >
-              <div class="game-image" :style="getAppImageStyle(app)">
-                <div class="game-overlay">
-                  <button class="btn-play">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M8 5v14l11-7z"/>
-                    </svg>
-                    <span>开始游戏</span>
-                  </button>
+          <!-- Hero 轮播 -->
+          <div class="hero" v-if="heroApps.length > 0">
+            <div class="hero-slides" :style="{ transform: `translateX(-${heroIndex * 100}%)` }">
+              <div
+                v-for="app in heroApps"
+                :key="app.app_id"
+                class="hero-slide"
+                :style="{ backgroundImage: `url(${appImages.get(app.app_id) || fallbackBanner(app.title)})` }"
+              >
+                <div class="hero-mask" />
+                <div class="hero-info">
+                  <h2 class="hero-title">{{ app.title }}</h2>
+                  <span v-if="app.is_hdr_supported" class="badge-hdr">HDR</span>
+                  <button class="hero-play-btn" @click="startGame(app)">立即游玩</button>
                 </div>
               </div>
-              <div class="game-info">
-                <h3>{{ app.name }}</h3>
-              </div>
+            </div>
+            <button class="hero-arrow left" @click="prevHero">‹</button>
+            <button class="hero-arrow right" @click="nextHero">›</button>
+            <div class="hero-dots">
+              <span
+                v-for="(app, i) in heroApps" :key="app.app_id"
+                class="hero-dot" :class="{ active: i === heroIndex }"
+                @click="heroIndex = i"
+              />
             </div>
           </div>
-          
-          <div class="empty-state" v-if="apps.length === 0">
-            <p>该主机暂无游戏</p>
+
+          <!-- 游戏网格 -->
+          <div class="games-grid-wrap">
+            <div class="games-grid-header">
+              <span class="grid-title">全部游戏</span>
+              <span class="grid-count">{{ apps.length }} 款</span>
+            </div>
+            <div class="games-grid">
+              <div
+                v-for="app in apps"
+                :key="app.app_id"
+                class="game-card"
+                @click="startGame(app)"
+              >
+                <div class="game-image" :style="getAppImageStyle(app)">
+                  <div class="game-overlay">
+                    <span class="icon-play">▶</span>
+                  </div>
+                  <span v-if="app.is_hdr_supported" class="badge-hdr card-hdr">HDR</span>
+                </div>
+                <div class="game-info">
+                  <h3>{{ app.title }}</h3>
+                </div>
+              </div>
+            </div>
+            <div class="empty-state" v-if="apps.length === 0">
+              <p>该主机暂无游戏</p>
+            </div>
           </div>
         </section>
       </main>
@@ -170,7 +162,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import GameStream from '@/components/GameStream.vue'
 import { apiLogin, apiAuthenticate, apiGetUser, apiGetHosts, apiGetApps, apiGetAppImage } from '@/services/api.js'
 import { MOONLIGHT_CONFIG } from '@/config/moonlight.js'
@@ -291,17 +283,13 @@ const loadHosts = async () => {
 // 选择主机
 const selectHost = async (host) => {
   selectedHost.value = host
+  heroIndex.value = 0
   
   try {
     const appList = await apiGetApps(host.host_id)
     apps.value = appList
-    
-    // 加载游戏封面
-    appList.forEach(app => {
-      if (app.image) {
-        loadAppImage(host.host_id, app.app_id)
-      }
-    })
+    // 全量异步加载封面
+    appList.forEach(app => loadAppImage(host.host_id, app.app_id))
   } catch (e) {
     console.error('加载游戏列表失败:', e)
     apps.value = []
@@ -319,14 +307,62 @@ const loadAppImage = async (hostId, appId) => {
   }
 }
 
-// 获取游戏封面样式
-const getAppImageStyle = (app) => {
-  const imageUrl = appImages.value.get(app.app_id)
-  if (imageUrl) {
-    return { backgroundImage: `url(${imageUrl})` }
-  }
-  return { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }
+// Hero 轮播
+const heroApps = computed(() => apps.value.slice(0, 5))
+const heroIndex = ref(0)
+let heroTimer = null
+
+function nextHero() {
+  if (heroApps.value.length === 0) return
+  heroIndex.value = (heroIndex.value + 1) % heroApps.value.length
 }
+function prevHero() {
+  if (heroApps.value.length === 0) return
+  heroIndex.value = (heroIndex.value - 1 + heroApps.value.length) % heroApps.value.length
+}
+
+// 封面 fallback
+const PALETTE = [
+  ['#1a1a2e', '#16213e', '#0f3460'],
+  ['#2d1b69', '#11998e', '#38ef7d'],
+  ['#0f2027', '#203a43', '#2c5364'],
+  ['#360033', '#0b8793', '#36d1dc'],
+  ['#1f4037', '#99f2c8', '#56ab2f'],
+  ['#373b44', '#4286f4', '#373b44'],
+  ['#1a1a1a', '#c0392b', '#e74c3c'],
+  ['#141e30', '#243b55', '#6a85b6'],
+]
+
+function gradientSvg(title, w, h) {
+  const idx = Math.abs(title.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % PALETTE.length
+  const [c1, c2, c3] = PALETTE[idx]
+  const letter = title.charAt(0).toUpperCase()
+  const fs = Math.floor(Math.min(w, h) * 0.38)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+    <defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${c1}"/>
+      <stop offset="50%" stop-color="${c2}"/>
+      <stop offset="100%" stop-color="${c3}"/>
+    </linearGradient></defs>
+    <rect width="${w}" height="${h}" fill="url(#g)"/>
+    <text x="${w/2}" y="${h/2}" font-family="Arial Black,Arial" font-weight="900"
+      font-size="${fs}" fill="rgba(255,255,255,0.12)"
+      text-anchor="middle" dominant-baseline="middle">${letter}</text>
+    <text x="${w/2}" y="${h*0.76}" font-family="Arial" font-size="${Math.floor(w*0.07)}"
+      fill="rgba(255,255,255,0.5)" text-anchor="middle">${title}</text>
+  </svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+}
+
+function fallbackBanner(title) { return gradientSvg(title, 1200, 460) }
+
+// 获取游戏封面样式（带 fallback）
+const getAppImageStyle = (app) => {
+  const url = appImages.value.get(app.app_id)
+  return { backgroundImage: `url(${url || gradientSvg(app.title, 220, 295)})` }
+}
+
+
 
 // 开始游戏
 const startGame = (app) => {
@@ -356,6 +392,11 @@ const onStreamReady = () => {
 
 onMounted(() => {
   checkAuth()
+  heroTimer = setInterval(nextHero, 4000)
+})
+
+onUnmounted(() => {
+  clearInterval(heroTimer)
 })
 </script>
 
@@ -593,131 +634,259 @@ onMounted(() => {
 }
 
 /* 游戏列表 */
-.section-header {
-  margin-bottom: 30px;
-}
-
 .btn-back {
   background: none;
   border: none;
   color: #888;
   cursor: pointer;
   font-size: 14px;
-  margin-bottom: 15px;
+  flex-shrink: 0;
 }
+.btn-back:hover { color: #fff; }
 
-.btn-back:hover {
-  color: #fff;
-}
-
-.settings-bar {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 30px;
-  padding: 15px 20px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  flex-wrap: wrap;
-}
-
-.setting-item {
+.games-topbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
+  margin-bottom: 0;
+  padding: 0 0 20px;
 }
 
-.setting-item label {
-  color: #888;
-  font-size: 14px;
+.games-topbar h2 {
+  font-size: 20px;
+  margin: 0;
+  color: #ddd;
 }
 
-.setting-item select {
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+/* Hero 轮播 */
+.hero {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  overflow: hidden;
+  border-radius: 16px;
+  margin-bottom: 36px;
+  background: #1a1a2e;
+}
+
+.hero-slides {
+  display: flex;
+  height: 100%;
+  transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hero-slide {
+  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.hero-mask {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.25) 55%, transparent 100%);
+}
+
+.hero-info {
+  position: absolute;
+  bottom: 60px;
+  left: 60px;
+  z-index: 1;
+}
+
+.hero-title {
+  font-size: 32px;
+  font-weight: 800;
   color: #fff;
-  font-size: 14px;
-  cursor: pointer;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  margin: 0 0 10px;
+  max-width: 400px;
 }
 
-.setting-item select:focus {
-  outline: none;
-  border-color: #667eea;
+.badge-hdr {
+  display: inline-block;
+  background: linear-gradient(135deg, #f093fb, #f5576c);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+}
+
+.hero-play-btn {
+  display: block;
+  margin-top: 14px;
+  padding: 11px 32px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.hero-play-btn:hover { opacity: 0.9; transform: translateY(-2px); }
+
+.hero-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  transition: background 0.2s;
+}
+
+.hero-arrow:hover { background: rgba(102,126,234,0.6); }
+.hero-arrow.left { left: 20px; }
+.hero-arrow.right { right: 20px; }
+
+.hero-dots {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 7px;
+  z-index: 2;
+}
+
+.hero-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.hero-dot.active {
+  background: #fff;
+  width: 22px;
+  border-radius: 4px;
+}
+
+/* 游戏网格 */
+
+
+.games-grid-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid rgba(255,255,255,0.06);
+}
+
+.grid-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  padding-left: 12px;
+  position: relative;
+}
+
+.grid-title::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 2px; bottom: 2px;
+  width: 4px;
+  background: linear-gradient(180deg, #667eea, #764ba2);
+  border-radius: 2px;
+}
+
+.grid-count {
+  font-size: 13px;
+  color: #666;
 }
 
 .games-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 20px;
 }
 
 .game-card {
   cursor: pointer;
-  transition: transform 0.2s;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1c1e27;
+  border: 2px solid transparent;
+  transition: transform 0.22s, border-color 0.22s, box-shadow 0.22s;
 }
 
 .game-card:hover {
-  transform: scale(1.02);
+  transform: translateY(-5px);
+  border-color: rgba(102,126,234,0.55);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
 }
 
 .game-image {
-  aspect-ratio: 3/4;
+  aspect-ratio: 3 / 4;
   background-size: cover;
   background-position: center;
-  border-radius: 12px;
-  overflow: hidden;
   position: relative;
+  overflow: hidden;
 }
 
 .game-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0,0,0,0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity 0.22s;
 }
 
-.game-card:hover .game-overlay {
-  opacity: 1;
+.game-card:hover .game-overlay { opacity: 1; }
+
+.icon-play {
+  font-size: 38px;
+  color: #fff;
+  text-shadow: 0 0 16px rgba(102,126,234,1);
 }
 
-.btn-play {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.btn-play:hover {
-  transform: scale(1.05);
-}
-
-.btn-play svg {
-  width: 20px;
-  height: 20px;
+.card-hdr {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
 }
 
 .game-info {
-  padding: 15px 5px;
+  padding: 10px 12px 12px;
 }
 
 .game-info h3 {
-  font-size: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ccc;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin: 0;
+}
+
+.section-header {
+  margin-bottom: 30px;
 }
 
 .empty-state {
