@@ -4,7 +4,7 @@
   "description": "Vue 3 + Moonlight Web 云游戏客户端",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview"
   },
