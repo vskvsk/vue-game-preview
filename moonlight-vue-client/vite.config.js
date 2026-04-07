@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
+// 开发环境使用 localhost，生产环境使用 .env.production 中的配置
+const DEV_SERVER_HOST = 'localhost'
+const DEV_SERVER_PORT = 8080
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -18,12 +22,12 @@ export default defineConfig({
     },
     proxy: {
       '/api/host/stream': {
-        target: 'ws://localhost:8080',
+        target: `ws://${DEV_SERVER_HOST}:${DEV_SERVER_PORT}`,
         ws: true,
         changeOrigin: true
       },
       '/api': {
-        target: 'http://localhost:8080',
+        target: `http://${DEV_SERVER_HOST}:${DEV_SERVER_PORT}`,
         changeOrigin: true,
         // 排除 WebSocket 升级请求，避免与上面的 ws 规则冲突
         bypass(req) {
@@ -31,7 +35,7 @@ export default defineConfig({
         }
       },
       '/host/stream': {
-        target: 'ws://localhost:8080',
+        target: `ws://${DEV_SERVER_HOST}:${DEV_SERVER_PORT}`,
         ws: true
       }
     }

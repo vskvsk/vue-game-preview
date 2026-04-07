@@ -1,6 +1,9 @@
 // Moonlight Web 配置
 // 根据你的后端服务地址修改以下配置
 
+// 从环境变量获取 API 基础地址（生产环境使用 .env.production 中的配置）
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+
 export const MOONLIGHT_CONFIG = {
   // API 基础地址
   apiBaseUrl: '',
@@ -49,5 +52,9 @@ export const MOONLIGHT_CONFIG = {
 
 // 构建 API URL
 export function buildUrl(path) {
+  // 如果有配置 VITE_API_BASE_URL，使用它；否则使用当前域名
+  if (API_BASE_URL) {
+    return `${API_BASE_URL}${path}`
+  }
   return `${window.location.origin}${MOONLIGHT_CONFIG.apiBaseUrl}${path}`
 }

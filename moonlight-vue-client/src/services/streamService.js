@@ -1,5 +1,5 @@
 // 云游戏流服务 - 封装 Moonlight Web 核心功能
-import { MOONLIGHT_CONFIG } from '@/config/moonlight.js'
+import { MOONLIGHT_CONFIG, buildUrl } from '@/config/moonlight.js'
 import '@moonlight/polyfill/index.js'
 import { Stream } from '@moonlight/stream/index.js'
 import { defaultStreamInputConfig, StreamInput } from '@moonlight/stream/input.js'
@@ -31,7 +31,7 @@ export class StreamService {
 
   // 初始化 API
   async initApi() {
-    const host_url = `${window.location.origin}/api`
+    const host_url = buildUrl('/api')
     this.api = { host_url, bearer: null, user: null }
     return this.api
   }
